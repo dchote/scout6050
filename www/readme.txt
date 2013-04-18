@@ -1,0 +1,1 @@
+You will need to serve this via the lighttpd+websocket broker stuff at: https://launchpad.net/~roger.light/+archive/ppa

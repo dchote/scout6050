@@ -6,6 +6,22 @@
 #include "I2Cdev.h"
 #include "MPU6050_6Axis_MotionApps20.h"
 
+#include <aJSON.h>
+
+WIFI_PROFILE profile = {
+                /* SSID */ "127Main",
+ /* WPA/WPA2 passphrase */ "gimmewifi2",
+          /* IP address */ "",
+         /* subnet mask */ "",
+          /* Gateway IP */ "" };
+
+IPAddress server(172,20,0,250);
+
+PinoccioWifiClient wifiClient;
+mqttClient mqtt(server, 1883, callback, wifiClient);
+
+static SYS_Timer_t appTimer;
+
 MPU6050 mpu;
 
 bool dmpReady = false;  // set true if DMP init was successful
@@ -28,7 +44,8 @@ int angle[3];
 int rangle[3]; 
 int cangle[3]; 
 
-uint8_t teapotPacket[14] = { '$', 0x02, 0,0, 0,0, 0,0, 0,0, 0x00, 0x00, '\r', '\n' };
+bool streamEnabled = true;
+bool positionChanged = false;
 
 
 // MPU 
@@ -39,26 +56,51 @@ void dmpDataReady() {
 
 
 void setup() {
-	Wire.begin();
-
 	Serial.begin(115200);
-
+	
+	Serial.println("Initializing...");
+	
+	Pinoccio.init();
+	Wire.begin();
 	mpu.initialize();
+	
 	devStatus = mpu.dmpInitialize();
 
 	if (devStatus == 0) {
 		mpu.setDMPEnabled(true);
+		
 		attachInterrupt(0, dmpDataReady, RISING);
+		
 		mpuIntStatus = mpu.getIntStatus();
 		dmpReady = true;
 		packetSize = mpu.dmpGetFIFOPacketSize();
-	} else {/* ERROR */}
-
+		
+		Serial.println("MPU OK! Starting Wifi...");
+		
+		Wifi.begin(&profile);
+		
+		appTimer.interval = 5000;
+		appTimer.mode = SYS_TIMER_PERIODIC_MODE;
+		appTimer.handler = appTimerHandler;
+		SYS_TimerStart(&appTimer);
+		
+		Serial.println("Connecting MQTT...");
+		
+		if (mqtt.connect("pinoccio", "username", "password")) {
+			Serial.println("MQTT Connected!");
+		    mqtt.subscribe("dchote/scout6050-control");
+		}
+	} else {
+		Serial.println("MPU Failed!");
+	}
 }
 
 
 
 void loop() {
+	Pinoccio.loop();
+	mqtt.loop();
+
 	if (!dmpReady) return; // Only Start the Programm if MPU are Ready ! 
 
 	mpuInterrupt = false;
@@ -93,28 +135,62 @@ void loop() {
 		
 		if (rangle[0] != cangle[0]) {
 			cangle[0] = rangle[0];
-			
-			Serial.print("X: ");
-			Serial.println(rangle[0]);
+			positionChanged = true;
 		}
 		
 		if (rangle[1] != cangle[1]) {
 			cangle[1] = rangle[1];
-			
-			Serial.print("Y: ");
-			Serial.println(rangle[1]);
+			positionChanged = true;
 		}
 		
 		if (rangle[2] != cangle[2]) {
 			cangle[2] = rangle[2];
-			
-			Serial.print("Z: ");
-			Serial.println(rangle[2]);
+			positionChanged = true;
 		}
 		
 	}
-
-
+	
+	// stream changed data
+	if ((streamEnabled && mqtt.connected()) && positionChanged) {
+		positionChanged = false;
+		
+		char* jsonPositionString = jsonPosition();
+		
+		Serial.print("Sending JSON: ");
+		Serial.println(jsonPositionString);
+		
+		mqtt.publish("dchote/scout6050", jsonPositionString);
+		
+		free(jsonPositionString);
+	}
 
 }
 
+static void appTimerHandler(SYS_Timer_t *timer) {
+  //RgbLed.blinkCyan(200);
+}
+
+void callback(char* topic, byte* payload, unsigned int length) {
+  Serial.print("Received MQTT packet from topic : ");
+  Serial.println(topic);
+  Serial.write(payload, length);
+}
+
+char* jsonPosition() {
+	aJsonObject* root = aJson.createObject();
+	
+	if (root == NULL) {
+		Serial.println("Failed to create json packet");
+		return "error";
+	}
+	
+	aJson.addNumberToObject(root, "x", rangle[0]);
+	aJson.addNumberToObject(root, "y", rangle[1]);
+	aJson.addNumberToObject(root, "z", rangle[2]);
+	
+	char* string = aJson.print(root);
+	
+	aJson.deleteItem(root);
+	
+	return string;
+}

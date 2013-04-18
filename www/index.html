@@ -1,0 +1,122 @@
+<!DOCTYPE HTML>
+<html>
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+		<title>Scout6050 Demo</title>
+		<script type="text/javascript" src="mosquitto-1.1.js"></script>
+		<script src="http://code.jquery.com/jquery-latest.min.js" type="text/javascript"></script>
+	</head>
+	<body>
+		<div id="position">
+			<div>X: <span id="positionX">unknown</span></div>
+			<div>Y: <span id="positionY">unknown</span></div>
+			<div>Z: <span id="positionZ">unknown</span></div>
+			<div>updates <span id="totalPackets">0</span></div>
+		</div>
+		<div id="playarea">
+			<div>Pitch: <span id="pitch">unknown</span></div>
+			<div>Volume: <span id="volume">unknown</span></div>
+			<div>Pan: <span id="pan">unknown</span></div>
+			
+			<button onclick="play()">Oscillate me</button>
+			<button onclick="stop()">STAWP</button>
+			
+		</div>
+		
+		<script type="text/javascript">
+			var queue = new Mosquitto();
+			var url = 'ws://howard-manager.servers.howard:8080/mqtt';
+			var topic = 'dchote/scout6050';
+			
+			var position = null;
+			var packets = 0;
+			
+			var audioContext, oscillator, panner, volume;
+			
+			var playing;
+			
+			$(document).ready(function() {
+				try {
+					audioContext = new (window.AudioContext || window.webkitAudioContext);
+					
+					oscillator = audioContext.createOscillator();
+					panner = audioContext.createPanner();
+					volume = audioContext.createGainNode();
+					
+					oscillator.connect(panner);
+					
+					panner.setPosition(1, 0, 0);
+					panner.connect(volume);
+					
+					volume.gain.value = 0.5;
+					volume.connect(audioContext.destination);
+					
+				} catch (e) {
+					alert('No web audio oscillator support in this browser');
+				}
+				
+				queue.connect(url, 10);
+				
+				queue.onconnect = function(rc) {
+					if (rc == 0) {
+						document.title = "Connected to " + url;
+						
+						queue.subscribe(topic, 0);
+						
+						document.title = document.title + ' (' + topic + ')';
+					}
+		        };
+				
+				queue.onmessage = function(topic, payload, qos) {
+					var newPosition = jQuery.parseJSON(payload);
+					if (newPosition && newPosition.x) {
+						updatePosition(newPosition);
+					}
+				};
+					
+			});
+			
+			function updatePosition(newPosition) {
+				position = newPosition;
+				packets++;
+				
+				var volumeLevel = 1 - (((position.y / 180) * 100) * 0.02);
+				var pan = ((position.z / 180) * 100) * 0.05;
+				
+				$('#positionX').html(position.x);
+				$('#positionY').html(position.y);
+				$('#positionZ').html(position.z);
+				
+				$('#totalPackets').html(packets);
+				
+				$('#pitch').html(position.x);
+				$('#volume').html(volumeLevel);
+				$('#pan').html(pan);
+				
+				if (playing) {
+					oscillator.frequency.value = position.x;
+					volume.gain.value = volumeLevel;
+					panner.setPosition(pan, 0, 0);
+				}
+			}
+			
+			function stop() {
+				playing = false;
+				
+				oscillator.noteOff(0);
+			}
+
+			function play() {
+				playing = true;
+				
+				if (position.x != null) {
+					oscillator.frequency.value = position.x;
+				} else {
+					oscillator.frequency.value = 100;
+				}
+				
+				oscillator.noteOn(0);
+			}
+		</script>
+	</body>
+</html>
