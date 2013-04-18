@@ -9,8 +9,8 @@
 #include <aJSON.h>
 
 WIFI_PROFILE profile = {
-                /* SSID */ "127Main",
- /* WPA/WPA2 passphrase */ "gimmewifi2",
+                /* SSID */ "",
+ /* WPA/WPA2 passphrase */ "",
           /* IP address */ "",
          /* subnet mask */ "",
           /* Gateway IP */ "" };
