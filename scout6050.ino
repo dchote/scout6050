@@ -178,13 +178,16 @@ static void appTimerHandler(SYS_Timer_t *timer) {
 }
 
 void callback(char* topic, byte* payload, unsigned int length) {
-	char buffer[length + 1];
+	char buffer[length];
 	int i;
-	
+
 	for (i = 0; i < length; i++) {
 		buffer[i] = payload[i];
 	}
 	buffer[i] = '\0';
+	
+	Serial.print("Buffer: ");
+	Serial.println(buffer);
 	
 	aJsonObject* root = aJson.parse(buffer);
 	
@@ -261,8 +264,15 @@ char* jsonHealth() {
 	}
 	
 	aJson.addStringToObject(root, "payload", "health");
-	aJson.addNumberToObject(root, "batteryVoltage", Pinoccio.getBatteryVoltage());
-	aJson.addNumberToObject(root, "temperature", Pinoccio.getTemperature());
+	
+	//char voltage[3];
+	//char temperature[6];
+	
+	//dtostrf(Pinoccio.getBatteryVoltage(), 4, 2, voltage);
+    //dtostrf(Pinoccio.getTemperature(), 5, 2, temperature);
+	
+	aJson.addStringToObject(root, "batteryVoltage", "test");
+	aJson.addStringToObject(root, "temperature", "test");
 	
 	char* string = aJson.print(root);
 	

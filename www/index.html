@@ -90,7 +90,7 @@
 						} else if (responsePacket.payload == 'pong') {
 							var currentDate = new Date;
 							var currentTime = currentDate.getTime();
-							var pingTime = new Date(responsePacket.timestamp.substr(1));
+							var pingTime = new Date(responsePacket.timestamp);
 
 							$('#latency').html = (currentTime - pingTime);
 						} else if (responsePacket.payload == 'health') {
@@ -124,10 +124,10 @@
 			
 			function sendPing() {
 				var command = new Object();
-				command.payload = 'pinger';
+				command.payload = 'ping';
 				
 				var currentDate = new Date;
-				//command.time = 't' + currentDate.getTime();
+				command.time = currentDate.getTime();
 				//command.filler = 'random text';
 				
 				var commandString = JSON.stringify(command);
