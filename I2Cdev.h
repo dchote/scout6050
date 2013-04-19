@@ -67,7 +67,6 @@ THE SOFTWARE.
 // -----------------------------------------------------------------------------
 //#define I2CDEV_SERIAL_DEBUG
 
-#define ARDUINO 115
 #include <Pinoccio.h>
 #include <Wire.h>
 

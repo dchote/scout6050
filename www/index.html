@@ -8,10 +8,19 @@
 	</head>
 	<body>
 		<div id="position">
-			<div>X: <span id="positionX">unknown</span></div>
-			<div>Y: <span id="positionY">unknown</span></div>
-			<div>Z: <span id="positionZ">unknown</span></div>
-			<div>updates <span id="totalPackets">0</span></div>
+			<div>Roll: <span id="rollValue">unknown</span></div>
+			<div>Pitch: <span id="pitchValue">unknown</span></div>
+			<div>Yaw: <span id="yawValue">unknown</span></div>
+			<div>updates: <span id="totalPackets">0</span></div>
+			<div>latency: <span id="latency">unknown</span></div>
+			<div>voltage: <span id="batteryVoltage">unknown</span></div>
+			<div>temp: <span id="temperature">unknown</span></div>
+			
+			<button onclick="startStream()">Start Stream</button>
+			<button onclick="stopStream()">Stop Stream</button>
+			<button onclick="sendPing()">Ping</button>
+			<button onclick="requestHealth()">Health</button>
+			
 		</div>
 		<div id="playarea">
 			<div>Pitch: <span id="pitch">unknown</span></div>
@@ -25,13 +34,16 @@
 		
 		<script type="text/javascript">
 			var queue = new Mosquitto();
-			var url = 'ws://howard-manager.servers.howard:8080/mqtt';
+			
+			var url = 'ws://' + window.location.host + '/mqtt';
+			
 			var topic = 'dchote/scout6050';
+			var controlTopic = 'dchote/scout6050-control';
 			
 			var position = null;
 			var packets = 0;
 			
-			var audioContext, oscillator, panner, volume;
+			var audioContext, oscillator;
 			
 			var playing;
 			
@@ -40,16 +52,7 @@
 					audioContext = new (window.AudioContext || window.webkitAudioContext);
 					
 					oscillator = audioContext.createOscillator();
-					panner = audioContext.createPanner();
-					volume = audioContext.createGainNode();
-					
-					oscillator.connect(panner);
-					
-					panner.setPosition(1, 0, 0);
-					panner.connect(volume);
-					
-					volume.gain.value = 0.5;
-					volume.connect(audioContext.destination);
+					oscillator.connect(audioContext.destination);
 					
 				} catch (e) {
 					alert('No web audio oscillator support in this browser');
@@ -64,14 +67,40 @@
 						queue.subscribe(topic, 0);
 						
 						document.title = document.title + ' (' + topic + ')';
+						/*
+						setInterval(function() {
+							
+						},5000);
+						*/
 					}
 		        };
 				
 				queue.onmessage = function(topic, payload, qos) {
-					var newPosition = jQuery.parseJSON(payload);
-					if (newPosition && newPosition.x) {
-						updatePosition(newPosition);
+					if (payload.length < 3) {
+						return;
 					}
+					
+					try {
+						var responsePacket = jQuery.parseJSON(payload);
+
+						if (responsePacket.payload == 'position') {
+							if (responsePacket && responsePacket.yaw) {
+								updatePosition(responsePacket);
+							}
+						} else if (responsePacket.payload == 'pong') {
+							var currentDate = new Date;
+							var currentTime = currentDate.getTime();
+							var pingTime = new Date(responsePacket.timestamp.substr(1));
+
+							$('#latency').html = (currentTime - pingTime);
+						} else if (responsePacket.payload == 'health') {
+							$('#batteryVoltage').html(responsePacket.batteryVoltage);
+							$('#temperature').html(responsePacket.temperature);
+						}
+					} catch (e) {
+						console.log(e);
+					}
+					
 				};
 					
 			});
@@ -80,24 +109,53 @@
 				position = newPosition;
 				packets++;
 				
-				var volumeLevel = 1 - (((position.y / 180) * 100) * 0.02);
-				var pan = ((position.z / 180) * 100) * 0.05;
-				
-				$('#positionX').html(position.x);
-				$('#positionY').html(position.y);
-				$('#positionZ').html(position.z);
+				$('#yawValue').html(position.yaw);
+				$('#pitchValue').html(position.pitch);
+				$('#rollValue').html(position.roll);
 				
 				$('#totalPackets').html(packets);
 				
-				$('#pitch').html(position.x);
-				$('#volume').html(volumeLevel);
-				$('#pan').html(pan);
 				
 				if (playing) {
-					oscillator.frequency.value = position.x;
-					volume.gain.value = volumeLevel;
-					panner.setPosition(pan, 0, 0);
+					oscillator.frequency.value = position.yaw * 5;
 				}
+
+			}
+			
+			function sendPing() {
+				var command = new Object();
+				command.payload = 'pinger';
+				
+				var currentDate = new Date;
+				//command.time = 't' + currentDate.getTime();
+				//command.filler = 'random text';
+				
+				var commandString = JSON.stringify(command);
+				queue.publish(controlTopic, commandString, 0, 0);
+			}
+			
+			function requestHealth() {
+				var command = new Object();
+				command.payload = 'health';
+				
+				var commandString = JSON.stringify(command);
+				queue.publish(controlTopic, commandString, 0, 0);
+			}
+			
+			function startStream() {
+				var command = new Object();
+				command.payload = 'startStream';
+				
+				var commandString = JSON.stringify(command);
+				queue.publish(controlTopic, commandString, 0, 0);
+			}
+			
+			function stopStream() {
+				var command = new Object();
+				command.payload = 'stopStream';
+				
+				var commandString = JSON.stringify(command);
+				queue.publish(controlTopic, commandString, 0, 0);
 			}
 			
 			function stop() {
@@ -109,10 +167,10 @@
 			function play() {
 				playing = true;
 				
-				if (position.x != null) {
-					oscillator.frequency.value = position.x;
+				if (position.yaw != null) {
+					oscillator.frequency.value = position.yaw * 5;
 				} else {
-					oscillator.frequency.value = 100;
+					oscillator.frequency.value = 500;
 				}
 				
 				oscillator.noteOn(0);

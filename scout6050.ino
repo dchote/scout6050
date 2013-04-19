@@ -9,8 +9,8 @@
 #include <aJSON.h>
 
 WIFI_PROFILE profile = {
-                /* SSID */ "",
- /* WPA/WPA2 passphrase */ "",
+                /* SSID */ "127Main",
+ /* WPA/WPA2 passphrase */ "gimmewifi2",
           /* IP address */ "",
          /* subnet mask */ "",
           /* Gateway IP */ "" };
@@ -44,7 +44,7 @@ int angle[3];
 int rangle[3]; 
 int cangle[3]; 
 
-bool streamEnabled = true;
+bool streamEnabled = false;
 bool positionChanged = false;
 
 
@@ -150,43 +150,137 @@ void loop() {
 		
 	}
 	
-	// stream changed data
-	if ((streamEnabled && mqtt.connected()) && positionChanged) {
+	if (positionChanged) {
 		positionChanged = false;
 		
-		char* jsonPositionString = jsonPosition();
-		
-		Serial.print("Sending JSON: ");
-		Serial.println(jsonPositionString);
-		
-		mqtt.publish("dchote/scout6050", jsonPositionString);
-		
-		free(jsonPositionString);
+		Serial.print("yaw: ");
+		Serial.print(rangle[0]);
+		Serial.print(" pitch: ");
+		Serial.print(rangle[1]);
+		Serial.print(" roll: ");
+		Serial.println(rangle[2]);
+	
+		// stream changed data
+		if ((streamEnabled && mqtt.connected())) {
+			char* string = jsonPosition();
+			mqtt.publish("dchote/scout6050", string);
+			free(string);		
+		}
 	}
-
 }
 
 static void appTimerHandler(SYS_Timer_t *timer) {
-  //RgbLed.blinkCyan(200);
+	if (streamEnabled) {
+		RgbLed.blinkCyan(200);
+	} else {
+		RgbLed.blinkGreen(200);
+	}
 }
 
 void callback(char* topic, byte* payload, unsigned int length) {
-  Serial.print("Received MQTT packet from topic : ");
-  Serial.println(topic);
-  Serial.write(payload, length);
+	char buffer[length + 1];
+	int i;
+	
+	for (i = 0; i < length; i++) {
+		buffer[i] = payload[i];
+	}
+	buffer[i] = '\0';
+	
+	aJsonObject* root = aJson.parse(buffer);
+	
+	if (root == NULL) {
+		Serial.println("Failed to parse command packet");
+		return;
+	}
+	
+	aJsonObject* commandPayload = aJson.getObjectItem(root, "payload");
+	
+	if (commandPayload == NULL) {
+		Serial.println("Failed to retrieve command packet payload type");
+		return;
+	}
+	
+	String payloadType = (String)commandPayload->valuestring;
+	
+	Serial.print("Payload Type: ");
+	Serial.println(payloadType);
+	
+	if (payloadType == "startStream") {
+		Serial.println("Starting stream");
+		streamEnabled = true;
+	} else if (payloadType == "stopStream") {
+		Serial.println("Stopping stream");
+		streamEnabled = false;
+	} else if (payloadType == "health") {
+		Serial.println("Health request");
+		char* string = jsonHealth();
+		mqtt.publish("dchote/scout6050", string);
+		free(string);
+	} else if (payloadType == "ping") {
+		Serial.println("Ping");
+		
+		/*
+		aJsonObject* timestampObject = aJson.getObjectItem(root, "timestamp");
+		
+		if (timestampObject != NULL) {
+			int timestamp = timestampObject->valueint;
+			mqtt.publish("dchote/scout6050", jsonPong(timestamp));
+		}
+		*/
+	}
+	
+	aJson.deleteItem(root);
 }
 
 char* jsonPosition() {
 	aJsonObject* root = aJson.createObject();
 	
 	if (root == NULL) {
-		Serial.println("Failed to create json packet");
+		Serial.println("Failed to create jsonPosition packet");
 		return "error";
 	}
 	
-	aJson.addNumberToObject(root, "x", rangle[0]);
-	aJson.addNumberToObject(root, "y", rangle[1]);
-	aJson.addNumberToObject(root, "z", rangle[2]);
+	aJson.addStringToObject(root, "payload", "position");
+	aJson.addNumberToObject(root, "yaw", rangle[0]);
+	aJson.addNumberToObject(root, "pitch", rangle[1]);
+	aJson.addNumberToObject(root, "roll", rangle[2]);
+	
+	char* string = aJson.print(root);
+	
+	aJson.deleteItem(root);
+	
+	return string;
+}
+
+char* jsonHealth() {
+	aJsonObject* root = aJson.createObject();
+	
+	if (root == NULL) {
+		Serial.println("Failed to create jsonHealth packet");
+		return "error";
+	}
+	
+	aJson.addStringToObject(root, "payload", "health");
+	aJson.addNumberToObject(root, "batteryVoltage", Pinoccio.getBatteryVoltage());
+	aJson.addNumberToObject(root, "temperature", Pinoccio.getTemperature());
+	
+	char* string = aJson.print(root);
+	
+	aJson.deleteItem(root);
+	
+	return string;
+}
+
+char* jsonPong(int timestamp) {
+	aJsonObject* root = aJson.createObject();
+	
+	if (root == NULL) {
+		Serial.println("Failed to create jsonPong packet");
+		return "error";
+	}
+	
+	aJson.addStringToObject(root, "payload", "pong");
+	aJson.addNumberToObject(root, "timestamp", timestamp);
 	
 	char* string = aJson.print(root);
 	
