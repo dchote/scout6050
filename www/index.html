@@ -3,26 +3,29 @@
 	<head>
 		<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 		<title>Scout6050 Demo</title>
+		
+		<link href="css/baseline.css" rel="stylesheet" type="text/css">
+		<link href="css/default.css" rel="stylesheet" type="text/css">
+		
 		<script type="text/javascript" src="mosquitto-1.1.js"></script>
 		<script src="http://code.jquery.com/jquery-latest.min.js" type="text/javascript"></script>
 	</head>
 	<body>
-		<div id="position">
-			<div>Roll: <span id="rollValue">unknown</span></div>
-			<div>Pitch: <span id="pitchValue">unknown</span></div>
-			<div>Yaw: <span id="yawValue">unknown</span></div>
-			<br>
-			<div>updates: <span id="totalPackets">0</span></div>
-			<br>
-			<div>voltage: <span id="batteryVoltage">unknown</span></div>
-			<div>temp: <span id="temperature">unknown</span></div>
-
-			
-		</div>
+		<header>
+			<h1>Scout5060</h1>
+			<h2 id="connectionDescription"></h2>
+		</header>
+		
+		<ul id="position">
+			<li>Roll: <span id="rollValue">unknown</span></li>
+			<li>Pitch: <span id="pitchValue">unknown</span></li>
+			<li>Yaw: <span id="yawValue">unknown</span></li>
+			<li class="counter">Packets: <span id="totalPackets">0</span></li>			
+		</ul>
+		
 		<div id="playarea">
-			<button onclick="play()">Oscillate me</button>
-			<button onclick="stop()">STAWP</button>
-			
+			<button id="playButton" onclick="play()" class="inactive">Start</button>
+			<button id="stopButton" onclick="stop()">Stop</button>
 		</div>
 		
 		<script type="text/javascript">
@@ -55,16 +58,9 @@
 				
 				queue.onconnect = function(rc) {
 					if (rc == 0) {
-						document.title = "Connected to " + url;
-						
 						queue.subscribe(topic, 0);
 						
-						document.title = document.title + ' (' + topic + ')';
-						/*
-						setInterval(function() {
-							
-						},5000);
-						*/
+						$('#connectionDescription').html('Connected with topic "' + topic + '"');
 					}
 		        };
 				
@@ -110,42 +106,6 @@
 				$('#rollValue').html(position.r);
 				
 				$('#totalPackets').html(packets);
-			}
-			
-			function sendPing() {
-				var command = new Object();
-				command.payload = 'ping';
-				
-				var currentDate = new Date;
-				command.time = currentDate.getTime();
-				//command.filler = 'random text';
-				
-				var commandString = JSON.stringify(command);
-				queue.publish(controlTopic, commandString, 0, 0);
-			}
-			
-			function requestHealth() {
-				var command = new Object();
-				command.payload = 'health';
-				
-				var commandString = JSON.stringify(command);
-				queue.publish(controlTopic, commandString, 0, 0);
-			}
-			
-			function startStream() {
-				var command = new Object();
-				command.payload = 'startStream';
-				
-				var commandString = JSON.stringify(command);
-				queue.publish(controlTopic, commandString, 0, 0);
-			}
-			
-			function stopStream() {
-				var command = new Object();
-				command.payload = 'stopStream';
-				
-				var commandString = JSON.stringify(command);
-				queue.publish(controlTopic, commandString, 0, 0);
 			}
 			
 			function stop() {
