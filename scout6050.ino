@@ -44,7 +44,7 @@ int angle[3];
 int rangle[3]; 
 int cangle[3]; 
 
-bool streamEnabled = false;
+bool streamEnabled = true;
 bool positionChanged = false;
 
 
@@ -78,26 +78,29 @@ void setup() {
 		Serial.println("MPU OK! Starting Wifi...");
 		
 		Wifi.begin(&profile);
-		
-		appTimer.interval = 5000;
+		/*
+		appTimer.interval = 10000;
 		appTimer.mode = SYS_TIMER_PERIODIC_MODE;
 		appTimer.handler = appTimerHandler;
 		SYS_TimerStart(&appTimer);
-		
+		*/
 		Serial.println("Connecting MQTT...");
 		
 		if (mqtt.connect("pinoccio", "username", "password")) {
 			Serial.println("MQTT Connected!");
 		    mqtt.subscribe("dchote/scout6050-control");
+			RgbLed.blinkCyan(200);
 		}
 	} else {
 		Serial.println("MPU Failed!");
 	}
+	
+	RgbLed.blinkRed(200);
 }
 
 
 
-void loop() {
+void loop() {	
 	Pinoccio.loop();
 	mqtt.loop();
 
@@ -150,16 +153,18 @@ void loop() {
 		
 	}
 	
+	
+	
 	if (positionChanged) {
 		positionChanged = false;
-		
-		Serial.print("yaw: ");
+		/*
+		Serial.print("y: ");
 		Serial.print(rangle[0]);
-		Serial.print(" pitch: ");
+		Serial.print(" p: ");
 		Serial.print(rangle[1]);
-		Serial.print(" roll: ");
+		Serial.print(" r: ");
 		Serial.println(rangle[2]);
-	
+		*/
 		// stream changed data
 		if ((streamEnabled && mqtt.connected())) {
 			char* string = jsonPosition();
@@ -167,44 +172,70 @@ void loop() {
 			free(string);		
 		}
 	}
+	
+	
 }
 
-static void appTimerHandler(SYS_Timer_t *timer) {
-	if (streamEnabled) {
+static void appTimerHandler(SYS_Timer_t *timer) {	
+	/*
+	if (mqtt.connected()) {
 		RgbLed.blinkCyan(200);
 	} else {
 		RgbLed.blinkGreen(200);
 	}
+
+	// Send health
+	char* string = jsonHealth();
+	mqtt.publish("dchote/scout6050", string);
+	free(string);
+	*/
 }
 
 void callback(char* topic, byte* payload, unsigned int length) {
+	return;
+	
+	/*
+	
+	callbacks are hosed... will try again later
+	
+	*/
+	
+		
+	byte* payloadCopy = (byte*)malloc(length);
+	memcpy(payloadCopy, payload, length);
+	
 	char buffer[length];
 	int i;
 
 	for (i = 0; i < length; i++) {
-		buffer[i] = payload[i];
+		buffer[i] = payloadCopy[i];
 	}
 	buffer[i] = '\0';
 	
-	Serial.print("Buffer: ");
-	Serial.println(buffer);
 	
-	aJsonObject* root = aJson.parse(buffer);
+	mqtt.publish("dchote/scout6050", "shit");
 	
-	if (root == NULL) {
+	free(payloadCopy);
+	
+	return;
+	aJsonObject* command = aJson.parse(buffer);
+	
+	if (command == NULL) {
 		Serial.println("Failed to parse command packet");
 		return;
 	}
 	
-	aJsonObject* commandPayload = aJson.getObjectItem(root, "payload");
+	aJsonObject* commandPayload = aJson.getObjectItem(command, "payload");
 	
 	if (commandPayload == NULL) {
 		Serial.println("Failed to retrieve command packet payload type");
 		return;
 	}
 	
-	String payloadType = (String)commandPayload->valuestring;
-	
+	String payloadType = String(commandPayload->valuestring);
+	aJson.deleteItem(commandPayload);
+	aJson.deleteItem(command);
+		
 	Serial.print("Payload Type: ");
 	Serial.println(payloadType);
 	
@@ -216,9 +247,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
 		streamEnabled = false;
 	} else if (payloadType == "health") {
 		Serial.println("Health request");
-		char* string = jsonHealth();
-		mqtt.publish("dchote/scout6050", string);
-		free(string);
+		mqtt.publish("dchote/scout6050", jsonHealth());
 	} else if (payloadType == "ping") {
 		Serial.println("Ping");
 		
@@ -232,7 +261,9 @@ void callback(char* topic, byte* payload, unsigned int length) {
 		*/
 	}
 	
-	aJson.deleteItem(root);
+	
+	//free(payloadCopy);
+	
 }
 
 char* jsonPosition() {
@@ -243,10 +274,9 @@ char* jsonPosition() {
 		return "error";
 	}
 	
-	aJson.addStringToObject(root, "payload", "position");
-	aJson.addNumberToObject(root, "yaw", rangle[0]);
-	aJson.addNumberToObject(root, "pitch", rangle[1]);
-	aJson.addNumberToObject(root, "roll", rangle[2]);
+	aJson.addNumberToObject(root, "y", rangle[0]);
+	aJson.addNumberToObject(root, "p", rangle[1]);
+	aJson.addNumberToObject(root, "r", rangle[2]);
 	
 	char* string = aJson.print(root);
 	
@@ -265,14 +295,14 @@ char* jsonHealth() {
 	
 	aJson.addStringToObject(root, "payload", "health");
 	
-	//char voltage[3];
-	//char temperature[6];
+	char voltage[7];
+	char temperature[7];
 	
-	//dtostrf(Pinoccio.getBatteryVoltage(), 4, 2, voltage);
-    //dtostrf(Pinoccio.getTemperature(), 5, 2, temperature);
+	dtostrf(Pinoccio.getBatteryVoltage(), 7, 2, voltage);
+    dtostrf(Pinoccio.getTemperature(), 7, 2, temperature);
 	
-	aJson.addStringToObject(root, "batteryVoltage", "test");
-	aJson.addStringToObject(root, "temperature", "test");
+	aJson.addStringToObject(root, "batteryVoltage", voltage);
+	aJson.addStringToObject(root, "temperature", temperature);
 	
 	char* string = aJson.print(root);
 	

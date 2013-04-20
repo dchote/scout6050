@@ -11,22 +11,15 @@
 			<div>Roll: <span id="rollValue">unknown</span></div>
 			<div>Pitch: <span id="pitchValue">unknown</span></div>
 			<div>Yaw: <span id="yawValue">unknown</span></div>
+			<br>
 			<div>updates: <span id="totalPackets">0</span></div>
-			<div>latency: <span id="latency">unknown</span></div>
+			<br>
 			<div>voltage: <span id="batteryVoltage">unknown</span></div>
 			<div>temp: <span id="temperature">unknown</span></div>
-			
-			<button onclick="startStream()">Start Stream</button>
-			<button onclick="stopStream()">Stop Stream</button>
-			<button onclick="sendPing()">Ping</button>
-			<button onclick="requestHealth()">Health</button>
+
 			
 		</div>
 		<div id="playarea">
-			<div>Pitch: <span id="pitch">unknown</span></div>
-			<div>Volume: <span id="volume">unknown</span></div>
-			<div>Pan: <span id="pan">unknown</span></div>
-			
 			<button onclick="play()">Oscillate me</button>
 			<button onclick="stop()">STAWP</button>
 			
@@ -83,10 +76,8 @@
 					try {
 						var responsePacket = jQuery.parseJSON(payload);
 
-						if (responsePacket.payload == 'position') {
-							if (responsePacket && responsePacket.yaw) {
-								updatePosition(responsePacket);
-							}
+						if (responsePacket.y && responsePacket.p) {
+							updatePosition(responsePacket);
 						} else if (responsePacket.payload == 'pong') {
 							var currentDate = new Date;
 							var currentTime = currentDate.getTime();
@@ -107,19 +98,18 @@
 			
 			function updatePosition(newPosition) {
 				position = newPosition;
-				packets++;
-				
-				$('#yawValue').html(position.yaw);
-				$('#pitchValue').html(position.pitch);
-				$('#rollValue').html(position.roll);
-				
-				$('#totalPackets').html(packets);
-				
 				
 				if (playing) {
-					oscillator.frequency.value = position.yaw * 5;
+					oscillator.frequency.value = position.y * 5;
 				}
-
+				
+				packets++;
+				
+				$('#yawValue').html(position.y);
+				$('#pitchValue').html(position.p);
+				$('#rollValue').html(position.r);
+				
+				$('#totalPackets').html(packets);
 			}
 			
 			function sendPing() {
@@ -168,7 +158,7 @@
 				playing = true;
 				
 				if (position.yaw != null) {
-					oscillator.frequency.value = position.yaw * 5;
+					oscillator.frequency.value = position.y * 5;
 				} else {
 					oscillator.frequency.value = 500;
 				}
