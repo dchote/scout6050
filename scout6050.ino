@@ -78,12 +78,12 @@ void setup() {
 		Serial.println("MPU OK! Starting Wifi...");
 		
 		Wifi.begin(&profile);
-		/*
+		
 		appTimer.interval = 10000;
 		appTimer.mode = SYS_TIMER_PERIODIC_MODE;
 		appTimer.handler = appTimerHandler;
 		SYS_TimerStart(&appTimer);
-		*/
+		
 		Serial.println("Connecting MQTT...");
 		
 		if (mqtt.connect("pinoccio", "username", "password")) {
@@ -189,6 +189,7 @@ static void appTimerHandler(SYS_Timer_t *timer) {
 	mqtt.publish("dchote/scout6050", string);
 	free(string);
 	*/
+	RgbLed.blinkGreen(200);
 }
 
 void callback(char* topic, byte* payload, unsigned int length) {
