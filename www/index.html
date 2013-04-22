@@ -7,8 +7,11 @@
 		<link href="css/baseline.css" rel="stylesheet" type="text/css">
 		<link href="css/default.css" rel="stylesheet" type="text/css">
 		
-		<script type="text/javascript" src="mosquitto-1.1.js"></script>
 		<script src="http://code.jquery.com/jquery-latest.min.js" type="text/javascript"></script>
+		
+		<script type="text/javascript" src="mosquitto-1.1.js"></script>
+		<script type="text/javascript" src="scout6050.js"></script>
+		<script type="text/javascript" src="https://raw.github.com/stuartmemo/wavy-jones/master/wavy-jones.js"></script>
 	</head>
 	<body>
 		<header>
@@ -17,114 +20,21 @@
 		</header>
 		
 		<ul id="position">
-			<li>Roll: <span id="rollValue">unknown</span></li>
+			<li>Frequency: <span id="frequencyValue">unknown</span></li>
+			<li>Pan: <span id="panValue">unknown</span></li>
+			<li>Volume: <span id="volumeValue">unknown</span></li>
+			
+			<li class="counter">Roll: <span id="rollValue">unknown</span></li>
 			<li>Pitch: <span id="pitchValue">unknown</span></li>
 			<li>Yaw: <span id="yawValue">unknown</span></li>
 			<li class="counter">Packets: <span id="totalPackets">0</span></li>			
 		</ul>
 		
+		<div id="oscilloscope"></div>
+		
 		<div id="playarea">
 			<button id="playButton" onclick="play()" class="inactive">Start</button>
 			<button id="stopButton" onclick="stop()">Stop</button>
 		</div>
-		
-		<script type="text/javascript">
-			var queue = new Mosquitto();
-			
-			var url = 'ws://' + window.location.host + '/mqtt';
-			
-			var topic = 'dchote/scout6050';
-			var controlTopic = 'dchote/scout6050-control';
-			
-			var position = null;
-			var packets = 0;
-			
-			var audioContext, oscillator;
-			
-			var playing;
-			
-			$(document).ready(function() {
-				try {
-					audioContext = new (window.AudioContext || window.webkitAudioContext);
-					
-					oscillator = audioContext.createOscillator();
-					oscillator.connect(audioContext.destination);
-					
-				} catch (e) {
-					alert('No web audio oscillator support in this browser');
-				}
-				
-				queue.connect(url, 10);
-				
-				queue.onconnect = function(rc) {
-					if (rc == 0) {
-						queue.subscribe(topic, 0);
-						
-						$('#connectionDescription').html('Connected with topic "' + topic + '"');
-					}
-		        };
-				
-				queue.onmessage = function(topic, payload, qos) {
-					if (payload.length < 3) {
-						return;
-					}
-					
-					try {
-						var responsePacket = jQuery.parseJSON(payload);
-
-						if (responsePacket.y && responsePacket.p) {
-							updatePosition(responsePacket);
-						} else if (responsePacket.payload == 'pong') {
-							var currentDate = new Date;
-							var currentTime = currentDate.getTime();
-							var pingTime = new Date(responsePacket.timestamp);
-
-							$('#latency').html = (currentTime - pingTime);
-						} else if (responsePacket.payload == 'health') {
-							$('#batteryVoltage').html(responsePacket.batteryVoltage);
-							$('#temperature').html(responsePacket.temperature);
-						}
-					} catch (e) {
-						console.log(e);
-					}
-					
-				};
-					
-			});
-			
-			function updatePosition(newPosition) {
-				position = newPosition;
-				
-				if (playing) {
-					oscillator.frequency.value = position.y * 5;
-				}
-				
-				packets++;
-				
-				$('#yawValue').html(position.y);
-				$('#pitchValue').html(position.p);
-				$('#rollValue').html(position.r);
-				
-				$('#totalPackets').html(packets);
-			}
-			
-			function stop() {
-				playing = false;
-				
-				oscillator.noteOff(0);
-			}
-
-			function play() {
-				playing = true;
-				
-				if (position.yaw != null) {
-					oscillator.frequency.value = position.y * 5;
-				} else {
-					oscillator.frequency.value = 500;
-				}
-				
-				oscillator.noteOn(0);
-			}
-		</script>
 	</body>
 </html>
